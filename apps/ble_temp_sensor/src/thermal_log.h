@@ -27,7 +27,7 @@ extern "C" {
 
 
 /* Include a vendor-specific block containing 16-bit temperature in the ad packet */
-#define INCLUDE_TEMP_IN_ADVERTISEMENT   1
+#define INCLUDE_TEMP_IN_ADVERTISEMENT   MYNEWT_VAL(INCLUDE_TEMP_IN_ADVERTISEMENT)
 
 /* ..this includes the standard GATT temperature attribute as well as the Proxy custom one */
 #define THERMOMETER_ATTRIBUTE_TEMP_CELSIUS 0x2A1f
@@ -44,7 +44,7 @@ extern "C" {
 /* Maximum number of previous temperature samples available.  */
 #define THERMAL_LOG_LENGTH MYNEWT_VAL(THERMAL_LOG_LENGTH)
 /* Sampling rate */
-#define THERMAL_LOG_SAMPLES_PER_SECOND 10
+#define THERMAL_LOG_SAMPLES_PER_SECOND MYNEWT_VAL(THERMAL_LOG_SAMPLES_PER_SECOND)
 
 
 

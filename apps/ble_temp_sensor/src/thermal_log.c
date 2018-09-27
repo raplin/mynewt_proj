@@ -81,8 +81,6 @@ thermal_log_taskloop(void *arg) {
 uint8_t
 thermal_log_read_history(uint8_t count,int16_t *dest)
 {
-    /* So we ready the thermal_log and writeptr here without any synchronization
-       because (I believe) it's not required; the writer (taskloop)
     uint8_t src_offset=thermal_log_writeptr; 
     uint8_t t;
     assert(count<=THERMAL_LOG_LENGTH);
