@@ -28,18 +28,23 @@
 #include <nimble/ble.h>
 #include <host/ble_hs.h>
 #include <services/gap/ble_svc_gap.h>
+#include <bsp/bsp.h>
+#include <hal/hal_gpio.h>
 
 #include "ble_temp_sensor.h"
+#include "thermal_log.h"
 #include "gatt_svr.h"
 
 /* Log data */
 struct log logger;
 
-static const char *device_name = "ble_temp_sensor";
+static const char *device_name = "ProxyTemp";
 
 static int ble_temp_gap_event(struct ble_gap_event *event, void *arg);
 
 static uint8_t ble_temp_addr_type;
+
+
 
 /*
  * Enables advertising with parameters:
@@ -81,17 +86,47 @@ ble_temp_advertise(void)
     fields.name_len = strlen(device_name);
     fields.name_is_complete = 1;
 
+#if INCLUDE_TEMP_IN_ADVERTISEMENT
+    {
+        uint8_t mfgData[4]; //<< Note this needs attention if changing things; not the nicest way to do it (but then using a struct means you have to get it packed properly on all compilers, etc etc; doable sure but whatev for right now)
+        /* write manufacturer data section */
+        mfgData[0]=PROXY_CORP_MANUF_ID & 0xff;
+        mfgData[1]=(PROXY_CORP_MANUF_ID>>8);    /* manuf. ID lsb, msb */
+        /* gets overwritten .. */
+        thermal_log_read_history(1,(int16_t *)&mfgData[2]); /* read a single int16 temp reading */
+        fields.mfg_data=mfgData;
+        fields.mfg_data_len=4;
+
+        /* also (slightly unrelated); advertise the standard 16-bit GATT attribute org.bluetooth.characteristic.temperature_celsius (0x2a1f) which is signed, in 10ths of a degree */
+        /* we don't really need to advertise it (or in fact provide it) but it looks nice */
+        fields.uuids16 = (ble_uuid16_t[]){
+              BLE_UUID16_INIT(THERMOMETER_ATTRIBUTE_TEMP_CELSIUS)
+            };
+        fields.num_uuids16 = 1;
+        fields.uuids16_is_complete = 1;
+
+    }
+#endif
+
     rc = ble_gap_adv_set_fields(&fields);
     if (rc != 0) {
         LOG(ERROR, "error setting advertisement data; rc=%d\n", rc);
         return;
     }
 
+    
+
     /* Begin advertising */
     memset(&adv_params, 0, sizeof(adv_params));
     adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
     adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
-    rc = ble_gap_adv_start(ble_temp_addr_type, NULL, BLE_HS_FOREVER,
+    rc = ble_gap_adv_start(ble_temp_addr_type, NULL, 
+#if INCLUDE_TEMP_IN_ADVERTISEMENT
+                            /* need to start+stop advertising regularly to change the ad data */
+                            TEMP_IN_ADVERTISEMENT_REFRESH_INTERVAL_MS,
+#else
+                            BLE_HS_FOREVER,
+#endif                            
                            &adv_params, ble_temp_gap_event, NULL);
     if (rc != 0) {
         LOG(ERROR, "error enabling advertisement; rc=%d\n", rc);
@@ -124,7 +159,9 @@ ble_temp_gap_event(struct ble_gap_event *event, void *arg)
         break;
 
     case BLE_GAP_EVENT_ADV_COMPLETE:
+#if INCLUDE_TEMP_IN_ADVERTISEMENT==0  /* don't report this every time adv refreshes temp */
         LOG(INFO, "adv complete\n");
+#endif        
         ble_temp_advertise();
         break;
 
@@ -174,9 +211,8 @@ main(void)
     /* Initialize the logger */
     log_register("ble_temp_sensor_log", &logger, &log_console_handler, NULL, LOG_SYSLEVEL);
 
-    /* Prepare the internal temperature module for measurement */
-    nrf_temp_init();
-
+    thermal_log_init();
+    
     /* Prepare BLE host and GATT server */
     ble_hs_cfg.sync_cb = on_sync;
     ble_hs_cfg.gatts_register_cb = gatt_svr_register_cb;
@@ -187,6 +223,7 @@ main(void)
     /* Set the default device name */
     rc = ble_svc_gap_device_name_set(device_name);
     assert(rc == 0);
+
 
     /* As the last thing, process events from default event queue */
     while (1) {

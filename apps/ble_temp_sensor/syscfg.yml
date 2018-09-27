@@ -31,3 +31,17 @@ syscfg.vals:
 
     # Set public device address.
     BLE_PUBLIC_DEV_ADDR: ((uint8_t[6]){0xcc, 0xbb, 0xaa, 0x33, 0x22, 0x11})
+
+syscfg.defs:
+    THERMAL_LOG_LENGTH:
+        description: 'How many temperature samples are retained'
+        value: 10
+
+    INCLUDE_TEMP_IN_ADVERTISEMENT:
+        description: 'Boolean ; include int16 current temperature as a vendor specific tag in advertisements'
+        value: 1
+
+    THERMAL_LOG_SAMPLES_PER_SECOND:
+        description: 'Sampling rate of temperature sensor in hz'
+        value: 10
+    

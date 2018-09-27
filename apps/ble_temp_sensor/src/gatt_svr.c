@@ -25,7 +25,7 @@
 #include <host/ble_uuid.h>
 
 #include "ble_temp_sensor.h"
-#include "temp.h"
+#include "thermal_log.h"
 
 /* 5c3a659e-897e-45e1-b016-007107c96df6 */
 static const ble_uuid128_t gatt_svr_svc_temp_uuid =
@@ -37,8 +37,21 @@ static const ble_uuid128_t gatt_svr_chr_temp_uuid =
         BLE_UUID128_INIT(0xf7, 0x6d, 0xc9, 0x07, 0x71, 0x00, 0x16, 0xb0,
                          0xe1, 0x45, 0x7e, 0x89, 0x9e, 0x65, 0x3a, 0x5c);
 
+
+/* Standard Celsius temp attribute, included for fun */
+static const ble_uuid16_t gatt_attr_temp_cel_uuid =
+        BLE_UUID16_INIT(THERMOMETER_ATTRIBUTE_TEMP_CELSIUS);
+
+
+
 static int
 gatt_svr_chr_cb(uint16_t conn_handle,
+                uint16_t attr_handle,
+                struct ble_gatt_access_ctxt *ctxt, void *arg);
+
+
+static int
+gatt_svr_chr_cb_celsius(uint16_t conn_handle,
                 uint16_t attr_handle,
                 struct ble_gatt_access_ctxt *ctxt, void *arg);
 
@@ -48,10 +61,16 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
         .uuid = &gatt_svr_svc_temp_uuid.u,
         .characteristics = (struct ble_gatt_chr_def[]) { {
-            /* Characteristic: Temperature measurement */
+            /* Characteristic: Temperature measurement, Proxy style (last 10 int16's) */
             .flags = BLE_GATT_CHR_F_READ,
             .uuid = &gatt_svr_chr_temp_uuid.u,
             .access_cb = gatt_svr_chr_cb,
+        },
+        {
+            /* Standard GATT Celsius temp attribute - could say add notifications etc to this */
+            .flags = BLE_GATT_CHR_F_READ,
+            .uuid = &gatt_attr_temp_cel_uuid.u,
+            .access_cb = gatt_svr_chr_cb_celsius,
         }, {
             0, /* No more characteristics in this service */
         }, }
@@ -68,15 +87,39 @@ gatt_svr_chr_cb(
     struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
     int rc;
-    int16_t temp;
-    temp = get_temp_measurement();
+    int16_t temp[THERMAL_LOG_LENGTH];
+    uint8_t read_count;
+    
+    read_count=thermal_log_read_history(THERMAL_LOG_LENGTH,temp);
 
-    LOG(INFO, "read value=%i\n", temp);
-
-    rc = os_mbuf_append(ctxt->om, &temp, sizeof(temp));
+    LOG(INFO, "Read %i logged temperature values\n", read_count);
+    if (read_count){
+        rc = os_mbuf_append(ctxt->om, &temp, sizeof(int16_t)*read_count);
+    }else{
+        /* sorry, no data at all yet */
+        rc=0; /* unclear from docs what this is meant to return in the case of failure, lets try zero */
+    }
 
     return rc;
 }
+
+
+/* Returns attribute for standard GATT celcius attribute*/
+static int
+gatt_svr_chr_cb_celsius(
+    uint16_t conn_handle,
+    uint16_t attr_handle,
+    struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    int rc;
+    int16_t temp=0;
+    thermal_log_read_history(1,&temp);
+    temp=temp/10; /* standard BLE attribute is signed int16, in 10ths of C */
+    LOG(INFO, "Read standard GATT temperature value\n");
+    rc = os_mbuf_append(ctxt->om, &temp, sizeof(int16_t));
+    return rc;
+}
+
 
 void
 gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
