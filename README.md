@@ -47,10 +47,3 @@ To flash the target board:
     $  newt load <target>
 ```
 
-
-![Alt text](Advertising_Martians_inc.png?raw=true "Advertising")
-
-![Alt text](GATT_read_two_characteristics.png?raw=true "Two GATT characteristics supported")
-
-![Alt text](Wireshark_advertising.jpg?raw=true "Wireshark advertising")
-
